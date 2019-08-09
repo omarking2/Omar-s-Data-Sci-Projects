@@ -1,0 +1,227 @@
+---
+title: "Governance Remittances and Growth"
+author: "Omar King"
+date: "April 5th, 2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)  
+library(haven)
+library(usmap)
+library(tidyverse)
+library(doBy)
+library(stargazer)
+library(kableExtra)
+library(ggplot2)
+library(AER)
+library(readxl)
+library(plm)
+library(dplyr)
+library(devtools)
+library(ggpubr)
+library(sf)
+library(raster)
+library(dplyr)
+
+#In addition, it uses the following visualization packages:
+library(tmap)    # for static and interactive maps
+library(leaflet) # for interactive maps
+library(mapview) # for interactive maps
+library(ggplot2) # tidyverse vis package
+library(shiny)   # for web applications
+library(lme4)
+
+```
+
+```{r warning=FALSE, message=FALSE}
+
+PanelData <-read_excel("C:/Users/king.2615/Documents/RemittancePanelData-1.xlsx")
+
+PanelData<- pdata.frame(PanelData, index=c("Country", "Year"))
+pdim(PanelData)
+
+View(PanelData)
+
+
+
+```
+
+```{r warning=FALSE, message=FALSE, results= "asis"}
+
+stargazer(PanelData,
+          title = "Summary Statistics",
+          type = "html")
+
+```
+
+
+```{r warning=FALSE, message=FALSE}
+
+pool_econ<-plm(GDPpercapita ~ RemPerGDP+GCF+FDIperGDP+ODAperGNI, data=PanelData, model="pooling")
+
+pool_govt<-plm(GDPpercapita ~ CC.EST+GE.EST+PV.EST+RQ.EST+RL.EST+VA.EST, data=PanelData, model="pooling")
+
+fe_econ<-plm(GDPpercapita ~ RemPerGDP+GCF+FDIperGDP+ODAperGNI, data=PanelData, model="within")
+
+fe_govt<-plm(GDPpercapita ~ CC.EST+GE.EST+PV.EST+RQ.EST+RL.EST+VA.EST, data=PanelData, model="within")
+
+re_econ<-plm(GDPpercapita ~ RemPerGDP+GCF+FDIperGDP+ODAperGNI, data=PanelData, model="random")
+
+re_govt<-plm(GDPpercapita ~ CC.EST+GE.EST+PV.EST+RQ.EST+RL.EST+VA.EST, data=PanelData, model="random")
+
+
+```
+
+```{r warning=FALSE, message=FALSE, results= "asis"}
+
+stargazer(pool_econ,fe_econ, re_econ,
+          type = "html",
+          column.labels = c("OLS", "FE", "RE"),
+          omit.stat = c("f"))
+
+```
+
+```{r warning=FALSE, message=FALSE, results= "asis"}
+
+stargazer(pool_govt, fe_govt, re_govt,
+          type = "html",
+          column.labels = c("OLS", "FE", "RE"),
+          covariate.labels = c("Corruption", "GovtEffect", "Violence", "Regulations", "Law","Voice" ),
+          omit.stat = c("f"))
+
+```
+##ADF Tests of GDP and Remittances
+```{r warning=FALSE, message=FALSE}
+
+library("urca")
+attach(PanelData)
+x= ur.df(RemPerGDP, type = "trend", selectlags = "BIC")
+
+print(x)
+summary(x)
+x@lags# of lags included
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+library("urca")
+attach(PanelData)
+g= ur.df(GDPpercapita, type = "trend", selectlags = "BIC")
+
+print(g)
+summary(g)
+g@lags# of lags included
+
+
+```
+## ADF Results
+According to the critical values there is no evidence of unit root asscoiated with remittannces and gdp per capita.   
+
+## Main Model 
+
+```{r warning=FALSE, message=FALSE}
+
+
+
+pool_main<-plm(GDPpercapita ~ RemPerGDP*RL.EST +  GCF+FDIperGDP+ODAperGNI, data = PanelData, model="pooling")
+
+fe_main<-plm(GDPpercapita ~ RemPerGDP*RL.EST +  GCF+FDIperGDP+ODAperGNI, data = PanelData, model="within")
+
+re_main<-plm(GDPpercapita ~ RemPerGDP*RL.EST + GCF+FDIperGDP+ODAperGNI, data = PanelData, model="random")
+
+
+
+
+
+```
+
+```{r warning=FALSE, message=FALSE, results= "asis"}
+stargazer(pool_main,fe_main, re_main,
+          type = "html",
+          column.labels = c("OLS", "FE", "RE"),
+          omit.stat = c("f"))
+```
+
+## Visualizations 
+```{r warning=FALSE, message=FALSE}
+
+Nigeria<- filter(PanelData, Country == "Nigeria")
+
+View(Nigeria)
+
+SLE<- filter(PanelData, Country_code == "SLE")
+
+View(SLE)
+
+my.ts.plot <- ggplot(Nigeria, aes(x = Year)) +
+  geom_line(aes(y = RemPerGDP, colour = SICCode))
+
+
+ggplot(PanelData, aes(x=RemPerGDP, y=GDPpercapita, color="red", fill="black",  alpha(0.1), size=2)) +
+  geom_point(shape=11)
+
+
+#interacation
+ggplot(PanelData, aes(x=RemPerGDP*RL.EST, y=GDPpercapita, color="red", fill="black",  alpha(0.1), size=2)) +
+  geom_point(shape=11)
+
+
+ggplot(data=Nigeria, aes(x=RL.EST, y= GDPpercapita, label=Country_code))+
+  geom_text()+
+  geom_smooth(method = "lm", se=FALSE) +
+  xlab("Rule of Law") +
+  ylab("GDP Per Capita")
+
+
+ggplot(data=SLE, aes(x=RL.EST, y= GDPpercapita, label=Country_code))+
+  geom_text()+
+  geom_smooth(method = "lm", se=FALSE) +
+  xlab("Rule of Law") +
+  ylab("GDP Per Capita")
+
+PanelData %>%
+  group_by(factor(Country)) %>%
+   summarize(  "Mean GDPpercapita"=mean(GDPpercapita), "Mean Remittance% of GDP"= mean(RemPerGDP), "Mean Rule of Law" = mean( RL.EST)) %>%
+  knitr::kable() %>%
+  kable_styling("striped", "hover", full_width=F) %>%
+  row_spec(1, bold = T, color = "yellow", background = "red") %>%
+  column_spec(2:3, color = "red", background = "white") %>%
+  footnote(general = "Effect of Rule of Law and Remittances Low= -2.5, High = 2.5")
+
+
+Year2017 <- filter(PanelData, Year == "2017")
+
+
+
+Year2017 %>% 
+  ggplot()+
+  geom_bar(mapping=aes(x=reorder(Country, GDPpercapita), y=GDPpercapita), stat = 'identity') +
+  coord_flip() +
+  scale_y_continuous(expand = c(0,0), limits = c(0,2500)) +
+  ylab("GDP Per Capita") +
+  xlab('Country') +
+  ggtitle('Country GDP 2017') +
+  theme(axis.text = element_text(size=6))
+
+Year2017 %>% 
+  ggplot()+
+  geom_bar(mapping=aes(x=reorder(Country, RemPerGDP), y=RemPerGDP), stat = 'identity') +
+  coord_flip() +
+  scale_y_continuous(expand = c(0,0), limits = c(0,12)) +
+  ylab("Remittances as %GDP") +
+  xlab('Country') +
+  ggtitle('Remittance Flows 2017') +
+  theme(axis.text = element_text(size=6))
+
+
+
+
+```
+
+
